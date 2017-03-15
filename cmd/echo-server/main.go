@@ -10,6 +10,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"strings"
+	"sort"
 )
 
 func main() {
@@ -132,26 +133,46 @@ func serveHTTP(wr http.ResponseWriter, req *http.Request) {
 
 	fmt.Fprintf(wr, "-> Requesting IP: %s\n\n", req.RemoteAddr)
 
+	// -> Request Header
+
 	fmt.Fprintln(wr, "-> Request Headers: \n")
 	fmt.Fprintf(wr, "  %s %s %s\n", req.Proto, req.Method, req.URL)
 	fmt.Fprintf(wr, "\n")
 	fmt.Fprintf(wr, "  Host: %s\n", req.Host)
-	for key, values := range req.Header {
-		for _, value := range values {
-			fmt.Fprintf(wr, "  %s: %s\n", key, value)
+
+	var reqheaders []string
+	for k,vs := range req.Header {
+		for _, v := range vs {
+			reqheaders = append(reqheaders, (fmt.Sprintf("%s: %s", k,v)))
 		}
 	}
+	sort.Strings(reqheaders)
+	for _, h := range reqheaders {
+		fmt.Fprintf(wr, "  %s\n", h)
+	}
+
+	// -> Response Header
+
 	fmt.Fprintf(wr, "\n\n")
 	fmt.Fprintln(wr, "-> Response Headers: \n")
-	fmt.Fprintln(wr, " >> Note that you may also see `Transfer-Encoding` and `Date`! \n")
-	for k,v := range wr.Header() {
-		fmt.Fprintf(wr, "  %s:%s\n", k,v )
+	var respheaders []string
+	for k,vs := range wr.Header() {
+		for _, v := range vs {
+			respheaders = append(respheaders, (fmt.Sprintf("%s: %s", k,v)))
+		}
 	}
+	sort.Strings(respheaders)
+	for _, h := range respheaders {
+		fmt.Fprintf(wr, "  %s\n", h)
+	}
+	fmt.Fprintln(wr, "\n >> Note that you may also see Transfer-Encoding and Date! \n")
 
 
 	fmt.Fprintf(wr, "\n\n")
 	fmt.Fprintln(wr, "-> My environment:")
-	for _, e := range os.Environ() {
+	envs := os.Environ()
+	sort.Strings(envs)
+	for _, e := range envs {
 		pair := strings.Split(e, "=")
 		fmt.Fprintf(wr, "  %s=%s\n", pair[0],pair[1])
 	}
@@ -168,7 +189,7 @@ func serveHTTP(wr http.ResponseWriter, req *http.Request) {
 	fmt.Fprintf(wr, "-> Contents of /etc/resolv.conf: \n%s\n\n", str) // print the content as a 'string'
 
 	// Lets get hosts
-	fmt.Fprintf(wr, "\n\n")
+	fmt.Fprintf(wr, "\n")
 	hostsfile, err := ioutil.ReadFile("/etc/hosts") // just pass the file name
 	if err != nil {
 		fmt.Fprint(wr, "%s", err)
