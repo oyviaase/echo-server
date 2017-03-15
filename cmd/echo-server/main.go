@@ -95,9 +95,9 @@ func serveHTTP(wr http.ResponseWriter, req *http.Request) {
 	// Take in extra headers to present
 	addheaders := os.Getenv("ADD_HEADERS")
 	if len(addheaders) > 0 {
-		rawjson := json.RawMessage(addheaders)
+		// rawjson := json.RawMessage(addheaders)
 		var headerjson map[string]interface{}
-		json.Unmarshal(rawjson, &headerjson)
+		json.Unmarshal([]byte(addheaders), &headerjson)
 		for k, v := range headerjson {
 			//fmt.Printf("%s = %s", k, v)
 			wr.Header().Add(k, v.(string))
