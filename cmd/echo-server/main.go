@@ -167,6 +167,18 @@ func serveHTTP(wr http.ResponseWriter, req *http.Request) {
 
 	fmt.Fprintf(wr, "-> Contents of /etc/resolv.conf: \n%s\n\n", str) // print the content as a 'string'
 
+	// Lets get hosts
+	fmt.Fprintf(wr, "\n\n")
+	hostsfile, err := ioutil.ReadFile("/etc/hosts") // just pass the file name
+	if err != nil {
+		fmt.Fprint(wr, "%s", err)
+	}
+
+	hostsstr := string(hostsfile) // convert content to a 'string'
+
+	fmt.Fprintf(wr, "-> Contents of /etc/hosts: \n%s\n\n", hostsstr) // print the content as a 'string'
+
+
 	fmt.Fprintln(wr, "")
 	io.Copy(wr, req.Body)
 }
