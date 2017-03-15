@@ -3,10 +3,12 @@ package main
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 
 	"github.com/gorilla/websocket"
+	"strings"
 )
 
 func main() {
@@ -94,19 +96,44 @@ func serveHTTP(wr http.ResponseWriter, req *http.Request) {
 
 	host, err := os.Hostname()
 	if err == nil {
-		fmt.Fprintf(wr, "Request served by %s\n\n", host)
+		fmt.Fprintf(wr, "-> My hostname is: %s\n\n", host)
 	} else {
-		fmt.Fprintf(wr, "Server hostname unknown: %s\n\n", err.Error())
+		fmt.Fprintf(wr, "-> Server hostname unknown: %s\n\n", err.Error())
 	}
 
+	fmt.Fprintln(wr, "-> Request Headers: \n")
 	fmt.Fprintf(wr, "%s %s %s\n", req.Proto, req.Method, req.URL)
-	fmt.Fprintln(wr, "")
+	fmt.Fprintf(wr, "\n")
 	fmt.Fprintf(wr, "Host: %s\n", req.Host)
 	for key, values := range req.Header {
 		for _, value := range values {
 			fmt.Fprintf(wr, "%s: %s\n", key, value)
 		}
 	}
+	fmt.Fprintf(wr, "\n\n")
+	fmt.Fprintln(wr, "-> Response Headers: \n")
+	for k,v := range wr.Header() {
+		fmt.Fprintf(wr, "%s:%s", k,v )
+	}
+
+
+	fmt.Fprintf(wr, "\n\n")
+	fmt.Fprintln(wr, "-> My environment:")
+	for _, e := range os.Environ() {
+		pair := strings.Split(e, "=")
+		fmt.Fprintf(wr, "%s=%s\n", pair[0],pair[1])
+	}
+
+	// Lets get resolv.conf
+	fmt.Fprintf(wr, "\n\n")
+	resolvfile, err := ioutil.ReadFile("/etc/resolv.conf") // just pass the file name
+	if err != nil {
+		fmt.Fprint(wr, "%s", err)
+	}
+
+	str := string(resolvfile) // convert content to a 'string'
+
+	fmt.Fprintf(wr, "-> Contents of /etc/resolv.conf: \n%s\n\n", str) // print the content as a 'string'
 
 	fmt.Fprintln(wr, "")
 	io.Copy(wr, req.Body)
