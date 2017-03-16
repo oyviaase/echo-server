@@ -50,8 +50,8 @@ func main() {
 	http.HandleFunc("/", http.HandlerFunc(handler))
 
 	errs := RunServer(":"+port, ":"+sslport, map[string]string{
-	"cert": "./cert.pem",
-	"key":  "./key.pem",
+	"cert": "cert.pem",
+	"key":  "key.pem",
 	})
 
 	// This will run forever until channel receives error
