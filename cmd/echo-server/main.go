@@ -11,7 +11,30 @@ import (
 	"github.com/gorilla/websocket"
 	"strings"
 	"sort"
+	"log"
 )
+
+func RunServer(addr string, sslAddr string, ssl map[string]string) chan error {
+	// Thanks buddy guy: http://stackoverflow.com/a/29468115
+	errs := make(chan error)
+
+	go func() {
+		fmt.Printf("Echo server listening on port %s.\n", addr)
+		if err := http.ListenAndServe(addr, nil); err != nil {
+            		errs <- err
+        	}
+
+	}()
+
+	go func() {
+		fmt.Printf("Echo server listening on ssl port %s.\n", sslAddr)
+		if err := http.ListenAndServeTLS(sslAddr, ssl["cert"], ssl["key"], nil); err != nil {
+            		errs <- err
+        	}
+	}()
+
+	return errs
+}
 
 func main() {
 	port := os.Getenv("PORT")
@@ -19,11 +42,24 @@ func main() {
 		port = "8080"
 	}
 
-	fmt.Printf("Echo server listening on port %s.\n", port)
-	err := http.ListenAndServe(":"+port, http.HandlerFunc(handler))
-	if err != nil {
-		panic(err)
+	sslport := os.Getenv("SSLPORT")
+	if sslport == "" {
+		sslport = "8443"
 	}
+
+	http.HandleFunc("/", http.HandlerFunc(handler))
+
+	errs := RunServer(":"+port, ":"+sslport, map[string]string{
+	"cert": "./cert.pem",
+	"key":  "./key.pem",
+	})
+
+	// This will run forever until channel receives error
+	select {
+	case err := <-errs:
+	log.Printf("Could not start serving service due to (error: %s)", err)
+	}
+
 }
 
 var upgrader = websocket.Upgrader{
@@ -132,6 +168,12 @@ func serveHTTP(wr http.ResponseWriter, req *http.Request) {
 	}
 
 	fmt.Fprintf(wr, "-> Requesting IP: %s\n\n", req.RemoteAddr)
+
+	// -> TLS Info
+	if req.TLS != nil {
+		fmt.Fprintln(wr, "-> TLS Connection Info: \n")
+		fmt.Fprintf(wr, "  %+v\n\n", req.TLS)
+	}
 
 	// -> Request Header
 
