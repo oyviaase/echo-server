@@ -4,5 +4,5 @@ COPY bin /bin
 ENV PORT 8080
 EXPOSE 8080
 ENV ADD_HEADERS='{"X-Real-Server": "echo-server"}'
-WORKDIR /
+WORKDIR /bin
 ENTRYPOINT ["/bin/echo-server"]
