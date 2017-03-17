@@ -1,13 +1,17 @@
 # Echo Server Enhanced!
 
 A very simple HTTP echo server written in Go, meant for use on k8s
-but useful anywhere. Also has support for websockets.
+but useful anywhere. Also has support for websockets ;)
 
-- Any messages sent from a web-socket client are echoed.
-- Visit `/.ws` for a basic UI to connect and send web-socket messages.
-- Requests to any other URL will return a vast amount of information.
-- The `PORT` environment variable sets the server port.
-- No TLS support yet :(
+The goal of this project is to reliably provide useful information about
+the current session, the instance serving the session, and help test
+things like Load Balancers, Web Servers, and Browsers.
+
+- Default GET shows plethora of useful information.
+- Any messages sent from a websocket client are echoed.
+- Visit `/ws` via browser for an interactive UI to connect and send websocket messages.
+- The `PORT` and `SSLPORT` environment variable set the corresponding server ports.
+- Has SSL/TLS support already including some play-around self-signed certs.
 
 ## Test it out!
 
@@ -16,6 +20,17 @@ docker run -d -p 8080:8080 inanimate/echo-server
 ```
 
 Browsing to `localhost:8080`, you should then see something resembling the example below.
+
+### SSL/TLS
+
+The default encrypted port is `8443` and serves a self-signed certificate
+I've generated and builtin. The the CN is `cakewalk.herpderp.com` so you
+can easily distinguish it when working with echo-server.
+
+> Obviously, this is for testing purposes only! Do not use this in
+> production and definitely disallow it from being seen publicly!
+
+If you'd like to use your own, you can clone this repo, gen your own cert, and rebuild the bin/image.
 
 ## Extras
 
@@ -27,7 +42,7 @@ set to help you verify you're getting a response from the echo-server.
 ADD_HEADERS={"X-Foo": "bar", "X-Server": "cats1.0"}
 ```
 
-We also accept the following variables which are explicitly displayed
+We also accept the following k8s variables which are explicitly displayed
 at the top of the page for quick observance.
 
 * `POD_NAME` - Can be provided via `metadata.name`

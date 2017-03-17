@@ -73,7 +73,7 @@ func handler(wr http.ResponseWriter, req *http.Request) {
 	fmt.Printf("%s | %s %s\n", req.RemoteAddr, req.Method, req.URL)
 	if websocket.IsWebSocketUpgrade(req) {
 		serveWebSocket(wr, req)
-	} else if req.URL.Path == "/.ws" {
+	} else if req.URL.Path == "/ws" {
 		wr.Header().Add("Content-Type", "text/html")
 		wr.WriteHeader(200)
 		io.WriteString(wr, websocketHTML)
@@ -148,8 +148,8 @@ func serveHTTP(wr http.ResponseWriter, req *http.Request) {
 
 	// -> Intro
 
-	fmt.Fprintln(wr, "Welcome to echo-server! Here's what I know.\n\n")
-
+	fmt.Fprintln(wr, "Welcome to echo-server!  Here's what I know.")
+	fmt.Fprintf(wr, "  > Head to /ws for interactive websocket echo!\n\n")
 	// -> Hostname
 
 	host, err := os.Hostname()
