@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sort"
 	"log"
+	"time"
 )
 
 func RunServer(addr string, sslAddr string, ssl map[string]string) chan error {
@@ -145,12 +146,20 @@ func serveHTTP(wr http.ResponseWriter, req *http.Request) {
 	wr.Header().Add("Content-Type", "text/plain")
 	wr.WriteHeader(200)
 
+	// -> Intro
+
+	fmt.Fprintln(wr, "Welcome to echo-server! Here's what I know.\n\n")
+
+	// -> Hostname
+
 	host, err := os.Hostname()
 	if err == nil {
 		fmt.Fprintf(wr, "-> My hostname is: %s\n\n", host)
 	} else {
 		fmt.Fprintf(wr, "-> Server hostname unknown: %s\n\n", err.Error())
 	}
+
+	// -> Pod Details
 
 	podname := os.Getenv("POD_NAME")
 	if len(podname) > 0 {
@@ -167,17 +176,19 @@ func serveHTTP(wr http.ResponseWriter, req *http.Request) {
 		fmt.Fprintf(wr, "-> My Pod IP is: %s\n\n", podip)
 	}
 
+	// Requesting/Source IP
+
 	fmt.Fprintf(wr, "-> Requesting IP: %s\n\n", req.RemoteAddr)
 
 	// -> TLS Info
 	if req.TLS != nil {
-		fmt.Fprintln(wr, "-> TLS Connection Info: \n")
+		fmt.Fprintln(wr, "-> TLS Connection Info | \n")
 		fmt.Fprintf(wr, "  %+v\n\n", req.TLS)
 	}
 
 	// -> Request Header
 
-	fmt.Fprintln(wr, "-> Request Headers: \n")
+	fmt.Fprintln(wr, "-> Request Headers | \n")
 	fmt.Fprintf(wr, "  %s %s %s\n", req.Proto, req.Method, req.URL)
 	fmt.Fprintf(wr, "\n")
 	fmt.Fprintf(wr, "  Host: %s\n", req.Host)
@@ -193,10 +204,10 @@ func serveHTTP(wr http.ResponseWriter, req *http.Request) {
 		fmt.Fprintf(wr, "  %s\n", h)
 	}
 
-	// -> Response Header
+	// -> Response Headers
 
 	fmt.Fprintf(wr, "\n\n")
-	fmt.Fprintln(wr, "-> Response Headers: \n")
+	fmt.Fprintln(wr, "-> Response Headers | \n")
 	var respheaders []string
 	for k,vs := range wr.Header() {
 		for _, v := range vs {
@@ -207,11 +218,12 @@ func serveHTTP(wr http.ResponseWriter, req *http.Request) {
 	for _, h := range respheaders {
 		fmt.Fprintf(wr, "  %s\n", h)
 	}
-	fmt.Fprintln(wr, "\n >> Note that you may also see Transfer-Encoding and Date! \n")
+	fmt.Fprintln(wr, "\n  > Note that you may also see \"Transfer-Encoding\" and \"Date\"!")
 
+	// -> Environment
 
 	fmt.Fprintf(wr, "\n\n")
-	fmt.Fprintln(wr, "-> My environment:")
+	fmt.Fprintln(wr, "-> My environment |")
 	envs := os.Environ()
 	sort.Strings(envs)
 	for _, e := range envs {
@@ -228,7 +240,7 @@ func serveHTTP(wr http.ResponseWriter, req *http.Request) {
 
 	str := string(resolvfile) // convert content to a 'string'
 
-	fmt.Fprintf(wr, "-> Contents of /etc/resolv.conf: \n%s\n\n", str) // print the content as a 'string'
+	fmt.Fprintf(wr, "-> Contents of /etc/resolv.conf | \n%s\n", str) // print the content as a 'string'
 
 	// Lets get hosts
 	fmt.Fprintf(wr, "\n")
@@ -239,9 +251,14 @@ func serveHTTP(wr http.ResponseWriter, req *http.Request) {
 
 	hostsstr := string(hostsfile) // convert content to a 'string'
 
-	fmt.Fprintf(wr, "-> Contents of /etc/hosts: \n%s\n\n", hostsstr) // print the content as a 'string'
+	fmt.Fprintf(wr, "-> Contents of /etc/hosts | \n%s\n\n", hostsstr) // print the content as a 'string'
 
 
 	fmt.Fprintln(wr, "")
+	curtime := time.Now().UTC()
+	fmt.Fprintln(wr, "-> And that's the way it is", curtime)
+	fmt.Fprintln(wr, "\n// Thanks for using echo-server, a project by Mario Loria (InAnimaTe).")
+	fmt.Fprintln(wr, "// https://github.com/inanimate/echo-server")
+	fmt.Fprintln(wr, "// https://hub.docker.com/r/inanimate/echo-server")
 	io.Copy(wr, req.Body)
 }
