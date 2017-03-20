@@ -59,6 +59,9 @@ these in your manifest.
 ## Example Output
 
 ```
+Welcome to echo-server!  Here's what I know.
+  > Head to /ws for interactive websocket echo!
+
 -> My hostname is: echo-server-4282639374-6bvzg
 
 -> My Pod Name is: echo-server-4282639374-6bvzg
@@ -67,7 +70,11 @@ these in your manifest.
 
 -> Requesting IP: 10.2.2.0:40974
 
--> Request Headers:
+-> TLS Connection Info | 
+
+  &{Version:771 HandshakeComplete:true DidResume:false CipherSuite:52392 NegotiatedProtocol:h2 NegotiatedProtocolIsMutual:true ServerName:echo.arroyo.io PeerCertificates:[] VerifiedChains:[] SignedCertificateTimestamps:[] OCSPResponse:[] TLSUnique:[208 42 212 243 141 165 4 35 226 40 176 84]}
+
+-> Request Headers | 
 
   HTTP/1.1 GET /
 
@@ -88,16 +95,16 @@ these in your manifest.
   X-Real-Ip: 192.168.1.149
 
 
--> Response Headers:
+-> Response Headers |
 
   Content-Type: text/plain
   X-Real-Server: echo-server
 
- >> Note that you may also see Transfer-Encoding and Date!
+ >> Note that you may also see "Transfer-Encoding" and "Date"!
 
 
 
--> My environment:
+-> My environment |
   ADD_HEADERS={"X-Real-Server": "echo-server"}
   APACHESUCKS_PORT=tcp://10.3.0.41:80
   APACHESUCKS_PORT_80_TCP=tcp://10.3.0.41:80
@@ -147,14 +154,14 @@ these in your manifest.
   PORT=8080
 
 
--> Contents of /etc/resolv.conf:
+-> Contents of /etc/resolv.conf |
 search playground.svc.cluster.local svc.cluster.local cluster.local
 nameserver 10.3.0.10
 options ndots:5
 
 
 
--> Contents of /etc/hosts:
+-> Contents of /etc/hosts |
 # Kubernetes-managed hosts file.
 127.0.0.1	localhost
 ::1	localhost ip6-localhost ip6-loopback
@@ -166,5 +173,10 @@ fe00::2	ip6-allrouters
 
 
 
+-> And that's the way it is 2017-03-20 18:41:33.273214345 +0000 UTC
+
+// Thanks for using echo-server, a project by Mario Loria (InAnimaTe).
+// https://github.com/inanimate/echo-server
+// https://hub.docker.com/r/inanimate/echo-server
 ```
 
