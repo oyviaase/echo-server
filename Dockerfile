@@ -1,6 +1,6 @@
 FROM scratch
-COPY bin /bin
-
+ARG TARGETPLATFORM
+COPY artifacts/build/release/$TARGETPLATFORM/echo-server /bin/echo-server
 ENV PORT 8080
 ENV SSLPORT 8443
 

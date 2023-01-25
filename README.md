@@ -1,25 +1,35 @@
 # Echo Server Enhanced!
 
 A very simple HTTP echo server written in Go, meant for use on k8s
-but useful anywhere. Also has support for websockets ;)
+but useful anywhere. Also has support for websockets and server-sernt-events (SSE) ;)
 
-The goal of this project is to reliably provide useful information about
-the current session, the instance serving the session, and help test
-things like Load Balancers, Web Servers, and Browsers.
+The server is designed for testing HTTP proxies and clients. It echoes
+information about HTTP request headers and bodies back to the client.
 
+## Behavior
 - Default GET shows plethora of useful information.
 - Any messages sent from a websocket client are echoed.
-- Visit `/ws` via browser for an interactive UI to connect and send websocket messages.
+- Visit `/.ws` in a browser for a basic UI to connect and send websocket messages.
+- Request `/.sse` to receive the echo response via server-sent events.
+- Request any other URL to receive the echo response in plain text.
 - The `PORT` and `SSLPORT` environment variable set the corresponding server ports.
 - Has SSL/TLS support already including some play-around self-signed certs.
 
-## Test it out!
 
-```
-docker run -d -p 8080:8080 inanimate/echo-server
-```
+- Any messages sent from a websocket client are echoed as a websocket message.
+- Visit `/.ws` in a browser for a basic UI to connect and send websocket messages.
+- Request `/.sse` to receive the echo response via server-sent events.
+- Request any other URL to receive the echo response in plain text.
 
-Browsing to `localhost:8080`, you should then see something resembling the example below.
+## Configuration
+
+- The `PORT` environment variable sets the server port, which defaults to `8080`.
+- Set the `LOG_HTTP_BODY` environment variable to dump request bodies to `STDOUT`.
+- Set the `LOG_HTTP_HEADERS` environment variable to dump request headers to `STDOUT`.
+- Set the `SEND_SERVER_HOSTNAME` environment variable to `false` to prevent the
+  server from responding with its hostname before echoing the request. The
+  client may send the `X-Send-Server-Hostname` request header to `true` or
+  `false` to override this server-wide setting on a per-request basis.
 
 ### SSL/TLS
 
@@ -32,14 +42,41 @@ can easily distinguish it when working with echo-server.
 
 If you'd like to use your own, you can clone this repo, gen your own cert, and rebuild the bin/image.
 
-## Extras
+### Extras
 
 Additionally, you can provide a `ADD_HEADERS` variable with JSON formatted
 values to include as response headers. By default, `X-Real-Server: echo-server` is
 set to help you verify you're getting a response from the echo-server.
+ADD_HEADERS={"X-Foo": "bar", "X-Server": "cats1.0"}
+
+## Running the server
+
+The examples below show a few different ways of running the server with the HTTP
+server bound to a custom TCP port of `10000`.
+
+### Running locally
 
 ```
-ADD_HEADERS={"X-Foo": "bar", "X-Server": "cats1.0"}
+go get -u github.com/jmalloc/echo-server/...
+PORT=10000 echo-server
+```
+### Running under Docker
+
+To run the latest version as a container:
+```
+docker run --detach -p 10000:8080 jmalloc/echo-server
+```
+
+Or, as a swarm service:
+
+```
+docker service create --publish 10000:8080 jmalloc/echo-server
+```
+
+The docker container can be built locally with:
+
+```
+make docker
 ```
 
 We also accept the following k8s variables which are explicitly displayed
@@ -56,6 +93,7 @@ these in your manifest.
 > info. In the example below, I use `HELM*` variables to provide info
 > about the deployed chart.
 
+Browsing to `localhost:8080`, you should then see something resembling the example below.
 ## Example Output
 
 ```
@@ -179,4 +217,3 @@ fe00::2	ip6-allrouters
 // https://github.com/inanimate/echo-server
 // https://hub.docker.com/r/inanimate/echo-server
 ```
-

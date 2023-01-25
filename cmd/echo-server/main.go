@@ -1,18 +1,21 @@
 package main
 
 import (
+	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strconv"
+	"time"
 
 	"github.com/gorilla/websocket"
-	"strings"
-	"sort"
 	"log"
-	"time"
+	"sort"
+	"strings"
 )
 
 func RunServer(addr string, sslAddr string, ssl map[string]string) chan error {
@@ -22,16 +25,16 @@ func RunServer(addr string, sslAddr string, ssl map[string]string) chan error {
 	go func() {
 		fmt.Printf("Echo server listening on port %s.\n", addr)
 		if err := http.ListenAndServe(addr, nil); err != nil {
-            		errs <- err
-        	}
+			errs <- err
+		}
 
 	}()
 
 	go func() {
 		fmt.Printf("Echo server listening on ssl port %s.\n", sslAddr)
 		if err := http.ListenAndServeTLS(sslAddr, ssl["cert"], ssl["key"], nil); err != nil {
-            		errs <- err
-        	}
+			errs <- err
+		}
 	}()
 
 	return errs
@@ -51,16 +54,15 @@ func main() {
 	http.HandleFunc("/", http.HandlerFunc(handler))
 
 	errs := RunServer(":"+port, ":"+sslport, map[string]string{
-	"cert": "cert.pem",
-	"key":  "key.pem",
+		"cert": "cert.pem",
+		"key":  "key.pem",
 	})
 
 	// This will run forever until channel receives error
 	select {
 	case err := <-errs:
-	log.Printf("Could not start serving service due to (error: %s)", err)
+		log.Printf("Could not start serving service due to (error: %s)", err)
 	}
-
 }
 
 var upgrader = websocket.Upgrader{
@@ -70,19 +72,61 @@ var upgrader = websocket.Upgrader{
 }
 
 func handler(wr http.ResponseWriter, req *http.Request) {
-	fmt.Printf("%s | %s %s\n", req.RemoteAddr, req.Method, req.URL)
+	defer req.Body.Close()
+
+	if os.Getenv("LOG_HTTP_BODY") != "" || os.Getenv("LOG_HTTP_HEADERS") != "" {
+		fmt.Printf("--------  %s | %s %s\n", req.RemoteAddr, req.Method, req.URL)
+	} else {
+		fmt.Printf("%s | %s %s\n", req.RemoteAddr, req.Method, req.URL)
+	}
+
+	if os.Getenv("LOG_HTTP_HEADERS") != "" {
+		fmt.Printf("Headers\n")
+		printHeaders(os.Stdout, req.Header)
+	}
+
+	if os.Getenv("LOG_HTTP_BODY") != "" {
+		buf := &bytes.Buffer{}
+		buf.ReadFrom(req.Body) // nolint:errcheck
+
+		if buf.Len() != 0 {
+			w := hex.Dumper(os.Stdout)
+			w.Write(buf.Bytes()) // nolint:errcheck
+			w.Close()
+		}
+
+		// Replace original body with buffered version so it's still sent to the
+		// browser.
+		req.Body.Close()
+		req.Body = ioutil.NopCloser(
+			bytes.NewReader(buf.Bytes()),
+		)
+	}
+
+	sendServerHostnameString := os.Getenv("SEND_SERVER_HOSTNAME")
+	if v := req.Header.Get("X-Send-Server-Hostname"); v != "" {
+		sendServerHostnameString = v
+	}
+
+	sendServerHostname := !strings.EqualFold(
+		sendServerHostnameString,
+		"false",
+	)
+
 	if websocket.IsWebSocketUpgrade(req) {
-		serveWebSocket(wr, req)
-	} else if req.URL.Path == "/ws" {
+		serveWebSocket(wr, req, sendServerHostname)
+	} else if req.URL.Path == "/.ws" {
 		wr.Header().Add("Content-Type", "text/html")
 		wr.WriteHeader(200)
-		io.WriteString(wr, websocketHTML)
+		io.WriteString(wr, websocketHTML) // nolint:errcheck
+	} else if req.URL.Path == "/.sse" {
+		serveSSE(wr, req, sendServerHostname)
 	} else {
-		serveHTTP(wr, req)
+		serveHTTP(wr, req, sendServerHostname)
 	}
 }
 
-func serveWebSocket(wr http.ResponseWriter, req *http.Request) {
+func serveWebSocket(wr http.ResponseWriter, req *http.Request, sendServerHostname bool) {
 	connection, err := upgrader.Upgrade(wr, req, nil)
 	if err != nil {
 		fmt.Printf("%s | %s\n", req.RemoteAddr, err)
@@ -94,11 +138,13 @@ func serveWebSocket(wr http.ResponseWriter, req *http.Request) {
 
 	var message []byte
 
-	host, err := os.Hostname()
-	if err == nil {
-		message = []byte(fmt.Sprintf("Request served by %s", host))
-	} else {
-		message = []byte(fmt.Sprintf("Server hostname unknown: %s", err.Error()))
+	if sendServerHostname {
+		host, err := os.Hostname()
+		if err == nil {
+			message = []byte(fmt.Sprintf("Request served by %s", host))
+		} else {
+			message = []byte(fmt.Sprintf("Server hostname unknown: %s", err.Error()))
+		}
 	}
 
 	err = connection.WriteMessage(websocket.TextMessage, message)
@@ -129,7 +175,7 @@ func serveWebSocket(wr http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func serveHTTP(wr http.ResponseWriter, req *http.Request) {
+func serveHTTP(wr http.ResponseWriter, req *http.Request, sendServerHostname bool) {
 	// Take in extra headers to present
 	addheaders := os.Getenv("ADD_HEADERS")
 	if len(addheaders) > 0 {
@@ -139,9 +185,8 @@ func serveHTTP(wr http.ResponseWriter, req *http.Request) {
 		for k, v := range headerjson {
 			//fmt.Printf("%s = %s", k, v)
 			wr.Header().Add(k, v.(string))
-	    	}
+		}
 	}
-
 
 	wr.Header().Add("Content-Type", "text/plain")
 	wr.WriteHeader(200)
@@ -182,21 +227,30 @@ func serveHTTP(wr http.ResponseWriter, req *http.Request) {
 
 	// -> TLS Info
 	if req.TLS != nil {
-		fmt.Fprintln(wr, "-> TLS Connection Info | \n")
+		fmt.Fprintln(wr, "-> TLS Connection Info | \n ")
 		fmt.Fprintf(wr, "  %+v\n\n", req.TLS)
 	}
 
 	// -> Request Header
 
-	fmt.Fprintln(wr, "-> Request Headers | \n")
+	fmt.Fprintln(wr, "-> Request Headers | \n ")
 	fmt.Fprintf(wr, "  %s %s %s\n", req.Proto, req.Method, req.URL)
 	fmt.Fprintf(wr, "\n")
 	fmt.Fprintf(wr, "  Host: %s\n", req.Host)
 
 	var reqheaders []string
-	for k,vs := range req.Header {
+	for k, vs := range req.Header {
 		for _, v := range vs {
-			reqheaders = append(reqheaders, (fmt.Sprintf("%s: %s", k,v)))
+			reqheaders = append(reqheaders, (fmt.Sprintf("%s: %s", k, v)))
+		}
+	}
+
+	if sendServerHostname {
+		host, err := os.Hostname()
+		if err == nil {
+			fmt.Fprintf(wr, "Request served by %s\n\n", host)
+		} else {
+			fmt.Fprintf(wr, "Server hostname unknown: %s\n\n", err.Error())
 		}
 	}
 	sort.Strings(reqheaders)
@@ -207,11 +261,11 @@ func serveHTTP(wr http.ResponseWriter, req *http.Request) {
 	// -> Response Headers
 
 	fmt.Fprintf(wr, "\n\n")
-	fmt.Fprintln(wr, "-> Response Headers | \n")
+	fmt.Fprintln(wr, "-> Response Headers | \n ")
 	var respheaders []string
-	for k,vs := range wr.Header() {
+	for k, vs := range wr.Header() {
 		for _, v := range vs {
-			respheaders = append(respheaders, (fmt.Sprintf("%s: %s", k,v)))
+			respheaders = append(respheaders, (fmt.Sprintf("%s: %s", k, v)))
 		}
 	}
 	sort.Strings(respheaders)
@@ -228,14 +282,14 @@ func serveHTTP(wr http.ResponseWriter, req *http.Request) {
 	sort.Strings(envs)
 	for _, e := range envs {
 		pair := strings.Split(e, "=")
-		fmt.Fprintf(wr, "  %s=%s\n", pair[0],pair[1])
+		fmt.Fprintf(wr, "  %s=%s\n", pair[0], pair[1])
 	}
 
 	// Lets get resolv.conf
 	fmt.Fprintf(wr, "\n\n")
 	resolvfile, err := ioutil.ReadFile("/etc/resolv.conf") // just pass the file name
 	if err != nil {
-		fmt.Fprint(wr, "%s", err)
+		fmt.Fprintf(wr, "%s", err)
 	}
 
 	str := string(resolvfile) // convert content to a 'string'
@@ -246,13 +300,12 @@ func serveHTTP(wr http.ResponseWriter, req *http.Request) {
 	fmt.Fprintf(wr, "\n")
 	hostsfile, err := ioutil.ReadFile("/etc/hosts") // just pass the file name
 	if err != nil {
-		fmt.Fprint(wr, "%s", err)
+		fmt.Fprintf(wr, "%s", err)
 	}
 
 	hostsstr := string(hostsfile) // convert content to a 'string'
 
 	fmt.Fprintf(wr, "-> Contents of /etc/hosts | \n%s\n\n", hostsstr) // print the content as a 'string'
-
 
 	fmt.Fprintln(wr, "")
 	curtime := time.Now().UTC()
@@ -261,4 +314,123 @@ func serveHTTP(wr http.ResponseWriter, req *http.Request) {
 	fmt.Fprintln(wr, "// https://github.com/inanimate/echo-server")
 	fmt.Fprintln(wr, "// https://hub.docker.com/r/inanimate/echo-server")
 	io.Copy(wr, req.Body)
+	writeRequest(wr, req)
+}
+
+func serveSSE(wr http.ResponseWriter, req *http.Request, sendServerHostname bool) {
+	if _, ok := wr.(http.Flusher); !ok {
+		http.Error(wr, "Streaming unsupported!", http.StatusInternalServerError)
+		return
+	}
+
+	var echo strings.Builder
+	writeRequest(&echo, req)
+
+	wr.Header().Set("Content-Type", "text/event-stream")
+	wr.Header().Set("Cache-Control", "no-cache")
+	wr.Header().Set("Connection", "keep-alive")
+	wr.Header().Set("Access-Control-Allow-Origin", "*")
+
+	var id int
+
+	// Write an event about the server that is serving this request.
+	if sendServerHostname {
+		if host, err := os.Hostname(); err == nil {
+			writeSSE(
+				wr,
+				req,
+				&id,
+				"server",
+				host,
+			)
+		}
+	}
+
+	// Write an event that echoes back the request.
+	writeSSE(
+		wr,
+		req,
+		&id,
+		"request",
+		echo.String(),
+	)
+
+	// Then send a counter event every second.
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-req.Context().Done():
+			return
+		case t := <-ticker.C:
+			writeSSE(
+				wr,
+				req,
+				&id,
+				"time",
+				t.Format(time.RFC3339),
+			)
+		}
+	}
+}
+
+// writeSSE sends a server-sent event and logs it to the console.
+func writeSSE(
+	wr http.ResponseWriter,
+	req *http.Request,
+	id *int,
+	event, data string,
+) {
+	*id++
+	writeSSEField(wr, req, "event", event)
+	writeSSEField(wr, req, "data", data)
+	writeSSEField(wr, req, "id", strconv.Itoa(*id))
+	fmt.Fprintf(wr, "\n")
+	wr.(http.Flusher).Flush()
+}
+
+// writeSSEField sends a single field within an event.
+func writeSSEField(
+	wr http.ResponseWriter,
+	req *http.Request,
+	k, v string,
+) {
+	for _, line := range strings.Split(v, "\n") {
+		fmt.Fprintf(wr, "%s: %s\n", k, line)
+		fmt.Printf("%s | sse | %s: %s\n", req.RemoteAddr, k, line)
+	}
+}
+
+// writeRequest writes request headers to w.
+func writeRequest(w io.Writer, req *http.Request) {
+	fmt.Fprintf(w, "%s %s %s\n", req.Method, req.URL, req.Proto)
+	fmt.Fprintln(w, "")
+
+	fmt.Fprintf(w, "Host: %s\n", req.Host)
+	printHeaders(w, req.Header)
+
+	var body bytes.Buffer
+	io.Copy(&body, req.Body) // nolint:errcheck
+
+	if body.Len() > 0 {
+		fmt.Fprintln(w, "")
+		body.WriteTo(w) // nolint:errcheck
+	}
+}
+
+func printHeaders(w io.Writer, h http.Header) {
+	sortedKeys := make([]string, 0, len(h))
+
+	for key := range h {
+		sortedKeys = append(sortedKeys, key)
+	}
+
+	sort.Strings(sortedKeys)
+
+	for _, key := range sortedKeys {
+		for _, value := range h[key] {
+			fmt.Fprintf(w, "%s: %s\n", key, value)
+		}
+	}
 }
