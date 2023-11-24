@@ -1,5 +1,5 @@
-DOCKER_REPO = jmalloc/echo-server
-DOCKER_PLATFORMS += linux/amd64
+#DOCKER_REPO = harbor.uio.no/it-usit-www-drift/echo-server
+DOCKER_REPO = harbor.uio.no/intark/echo-server
 DOCKER_PLATFORMS += linux/arm64
 
 -include .makefiles/Makefile
