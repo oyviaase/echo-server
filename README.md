@@ -17,8 +17,8 @@ information about HTTP request headers and bodies back to the client.
 
 
 - Any messages sent from a websocket client are echoed as a websocket message.
-- Visit `/.ws` in a browser for a basic UI to connect and send websocket messages.
-- Request `/.sse` to receive the echo response via server-sent events.
+- Requests to a file named `.ws` under any path serve a basic UI to connect and send websocket messages.
+- Requests to a file named `.sse` under any path streams server-sent events.
 - Request any other URL to receive the echo response in plain text.
 
 ## Configuration
@@ -70,6 +70,11 @@ Additionally, you can provide a `ADD_HEADERS` variable with JSON formatted
 values to include as response headers. By default, `X-Real-Server: echo-server` is
 set to help you verify you're getting a response from the echo-server.
 ADD_HEADERS={"X-Foo": "bar", "X-Server": "cats1.0"}
+
+### WebSocket URL
+
+Set the `WEBSOCKET_ROOT` environment variable to prefix all websocket
+requests made by the `.ws` user interface with a specific path.
 
 ## Running the server
 

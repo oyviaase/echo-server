@@ -1,14 +1,20 @@
+// Package main is the executable for the echo server.
 package main
 
 import (
 	"bytes"
+	"embed"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"path"
+	"sort"
 	"strconv"
+	"strings"
+	"text/template"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -126,11 +132,9 @@ func handler(wr http.ResponseWriter, req *http.Request) {
 
 	if websocket.IsWebSocketUpgrade(req) {
 		serveWebSocket(wr, req, sendServerHostname)
-	} else if req.URL.Path == "/.ws" {
-		wr.Header().Add("Content-Type", "text/html")
-		wr.WriteHeader(200)
-		io.WriteString(wr, websocketHTML) // nolint:errcheck
-	} else if req.URL.Path == "/.sse" {
+	} else if path.Base(req.URL.Path) == ".ws" {
+		serveFrontend(wr, req)
+	} else if path.Base(req.URL.Path) == ".sse" {
 		serveSSE(wr, req, sendServerHostname)
 	} else {
 		serveHTTP(wr, req, sendServerHostname)
@@ -184,6 +188,33 @@ func serveWebSocket(wr http.ResponseWriter, req *http.Request, sendServerHostnam
 	if err != nil {
 		fmt.Printf("%s | %s\n", req.RemoteAddr, err)
 	}
+}
+
+//go:embed "html"
+var files embed.FS
+
+func serveFrontend(wr http.ResponseWriter, req *http.Request) {
+	const templateName = "html/frontend.tmpl.html"
+	tmpl, err := template.ParseFS(files, templateName)
+	if err != nil {
+		http.Error(wr, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	templateData := struct {
+		Path string
+	}{
+		Path: path.Join(
+			os.Getenv("WEBSOCKET_ROOT"),
+			path.Dir(req.URL.Path),
+		),
+	}
+	err = tmpl.Execute(wr, templateData)
+	if err != nil {
+		http.Error(wr, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	wr.Header().Add("Content-Type", "text/html")
+	wr.WriteHeader(200)
 }
 
 func serveHTTP(wr http.ResponseWriter, req *http.Request, sendServerHostname bool) {
